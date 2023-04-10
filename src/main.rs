@@ -94,7 +94,9 @@ async fn run() -> i32 {
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)
             .expect("failed to read config file");
-        toml::from_slice(&buf)
+        let string = String::from_utf8(buf)
+            .expect("failed to decode config file as UTF-8");
+        toml::from_str(&string)
             .expect("failed to parse config file")
     };
 
