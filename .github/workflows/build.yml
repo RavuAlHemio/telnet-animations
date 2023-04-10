@@ -1,0 +1,41 @@
+name: telnet-animations build
+on: [push]
+jobs:
+  build-arch-debug:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v3
+      - name: update packages
+        run: pacman -Syu --noconfirm
+      - name: install build dependencies
+        run: pacman -S --needed --noconfirm cargo python
+      - name: run debug build
+        run: cargo build
+      - name: run debug tests
+        run: cargo test
+      - name: upload debug binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: telnet-animations-debug
+          path: target/debug/telnet-animations
+  build-arch-release:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v3
+      - name: update packages
+        run: pacman -Syu --noconfirm
+      - name: install build dependencies
+        run: pacman -S --needed --noconfirm cargo python
+      - name: run release build
+        run: cargo build --release
+      - name: run release tests
+        run: cargo test --release
+      - name: upload release binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: telnet-animations-release
+          path: target/release/telnet-animations
