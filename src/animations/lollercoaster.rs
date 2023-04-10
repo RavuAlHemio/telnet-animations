@@ -43,7 +43,7 @@ const LOLLERCOASTER_MOVEMENTS: &str = concat!(
     "44412323236666666666666666",
     "666666",
 );
-const SLEEP_DURATION: Duration = Duration::from_millis(100);
+const SLEEP_DURATION: Duration = Duration::from_millis(50);
 
 
 pub(crate) async fn run(writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>, addr: SocketAddr) -> Result<(), telnet::Error> {
