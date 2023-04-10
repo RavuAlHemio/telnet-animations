@@ -12,7 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::Mutex;
 
-use crate::Config;
+use crate::SocketConfig;
 
 
 /// Interpret As Command (escape sequence)
@@ -159,7 +159,7 @@ pub(crate) async fn write_all_and_flush(writer: &mut BufWriter<OwnedWriteHalf>, 
     flush(writer, target).await
 }
 
-async fn run_animation(writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>, addr: SocketAddr, config: Config) -> Result<(), Error> {
+async fn run_animation(writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>, addr: SocketAddr, config: SocketConfig) -> Result<(), Error> {
     if config.animation == "roflcopter" {
         crate::animations::roflcopter::run(writer, addr).await
     } else if config.animation == "lollerskates" {
@@ -178,7 +178,7 @@ pub(crate) async fn process_command<'r, 'w>(
     mut reader: &'r mut BufReader<OwnedReadHalf>,
     writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>,
     addr: SocketAddr,
-    config: Config,
+    config: SocketConfig,
 ) -> Result<(), Error> {
     let cmd_byte = receive_u8(&mut reader, addr).await?;
     if [DO, DONT, WILL, WONT].contains(&cmd_byte) {

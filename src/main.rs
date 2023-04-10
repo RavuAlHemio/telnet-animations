@@ -11,6 +11,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
@@ -22,6 +24,11 @@ use crate::telnet::{ask_can_do_terminal_type, process_command, receive_u8};
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 struct Config {
+    pub sockets: Vec<SocketConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+struct SocketConfig {
     pub listen_socket_addr: SocketAddr,
     pub animation: String,
 }
@@ -56,7 +63,7 @@ fn hexdump(prefix: &str, buf: &[u8]) {
 }
 
 
-async fn handle_connection(socket: TcpStream, addr: SocketAddr, config: Config) -> Result<(), telnet::Error> {
+async fn handle_connection(socket: TcpStream, addr: SocketAddr, config: SocketConfig) -> Result<(), telnet::Error> {
     let (reader, writer) = socket.into_split();
     let mut reader_buf = BufReader::new(reader);
     let writer_buf = BufWriter::new(writer);
@@ -74,6 +81,13 @@ async fn handle_connection(socket: TcpStream, addr: SocketAddr, config: Config) 
             process_command(&mut reader_buf, Arc::clone(&writer_buf_mutex), addr, config.clone()).await?;
         }
     }
+}
+
+
+async fn accept_connection(listener: &TcpListener, socket_config: SocketConfig) -> (TcpStream, SocketAddr, SocketConfig) {
+    let (stream, addr) = listener.accept().await
+        .expect("failed to accept connection");
+    (stream, addr, socket_config)
 }
 
 
@@ -107,20 +121,23 @@ async fn run() -> i32 {
             .expect("failed to parse config file")
     };
 
-    let listener = TcpListener::bind(config.listen_socket_addr).await
-        .expect("failed to bind listener");
+    let mut listeners_configs = Vec::with_capacity(config.sockets.len());
+    for socket_config in &config.sockets {
+        let listener = TcpListener::bind(socket_config.listen_socket_addr).await
+            .expect("failed to bind listener");
+        listeners_configs.push((listener, socket_config.clone()));
+    }
+
     loop {
-        match listener.accept().await {
-            Ok((socket, addr)) => {
-                let config_copy = config.clone();
-                tokio::spawn(async move {
-                    handle_connection(socket, addr, config_copy).await
-                });
-            },
-            Err(e) => {
-                eprintln!("failed to accept connection: {}", e);
-            }
+        let mut awaiters = FuturesUnordered::new();
+        for (listener, config) in &listeners_configs {
+            awaiters.push(accept_connection(listener, config.clone()));
         }
+
+        let (socket, addr, config) = awaiters.next().await.unwrap();
+        tokio::spawn(async move {
+            handle_connection(socket, addr, config).await
+        });
     }
 }
 
