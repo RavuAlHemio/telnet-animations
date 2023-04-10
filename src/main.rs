@@ -1,4 +1,5 @@
 mod animations;
+mod coaster;
 mod telnet;
 
 

@@ -164,6 +164,8 @@ async fn run_animation(writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>, addr: Sock
         crate::animations::roflcopter::run(writer, addr).await
     } else if config.animation == "lollerskates" {
         crate::animations::lollerskates::run(writer, addr).await
+    } else if config.animation == "lollercoaster" {
+        crate::animations::lollercoaster::run(writer, addr).await
     } else {
         eprintln!("unknown animation {:?} configured", config.animation);
         let mut writer_guard = writer.lock().await;
