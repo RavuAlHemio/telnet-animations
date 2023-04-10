@@ -162,6 +162,8 @@ pub(crate) async fn write_all_and_flush(writer: &mut BufWriter<OwnedWriteHalf>, 
 async fn run_animation(writer: Arc<Mutex<BufWriter<OwnedWriteHalf>>>, addr: SocketAddr, config: Config) -> Result<(), Error> {
     if config.animation == "roflcopter" {
         crate::animations::roflcopter::run(writer, addr).await
+    } else if config.animation == "lollerskates" {
+        crate::animations::lollerskates::run(writer, addr).await
     } else {
         eprintln!("unknown animation {:?} configured", config.animation);
         let mut writer_guard = writer.lock().await;
