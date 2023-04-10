@@ -1,4 +1,4 @@
-mod roflcopter;
+mod animations;
 mod telnet;
 
 
@@ -11,16 +11,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use toml;
 
-use crate::telnet::{process_command, read_u8, write_all};
+use crate::telnet::{ask_can_do_terminal_type, process_command, receive_u8};
 
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 struct Config {
     pub listen_socket_addr: SocketAddr,
+    pub animation: String,
 }
 
 
@@ -53,18 +55,22 @@ fn hexdump(prefix: &str, buf: &[u8]) {
 }
 
 
-async fn handle_connection(mut socket: TcpStream, addr: SocketAddr) -> Option<()> {
-    // "can you do terminal type?"
-    let can_term_type_ask_buf = [telnet::IAC, telnet::DO, telnet::option::TERMINAL_TYPE];
-    write_all(&mut socket, addr, &can_term_type_ask_buf).await?;
+async fn handle_connection(socket: TcpStream, addr: SocketAddr, config: Config) -> Result<(), telnet::Error> {
+    let (reader, writer) = socket.into_split();
+    let mut reader_buf = BufReader::new(reader);
+    let writer_buf = BufWriter::new(writer);
+    let writer_buf_mutex = Arc::new(Mutex::new(writer_buf));
 
-    let (mut reader, writer) = socket.into_split();
-    let writer_lock = Arc::new(Mutex::new(writer));
+    {
+        let mut writer_guard = writer_buf_mutex.lock().await;
+        // "can you do terminal type?"
+        ask_can_do_terminal_type(&mut *writer_guard, addr).await?;
+    }
 
     loop {
-        let rd = read_u8(&mut reader, addr).await?;
+        let rd = receive_u8(&mut reader_buf, addr).await?;
         if rd == telnet::IAC {
-            process_command(&mut reader, Arc::clone(&writer_lock), addr).await?;
+            process_command(&mut reader_buf, Arc::clone(&writer_buf_mutex), addr, config.clone()).await?;
         }
     }
 }
@@ -105,8 +111,9 @@ async fn run() -> i32 {
     loop {
         match listener.accept().await {
             Ok((socket, addr)) => {
+                let config_copy = config.clone();
                 tokio::spawn(async move {
-                    handle_connection(socket, addr).await
+                    handle_connection(socket, addr, config_copy).await
                 });
             },
             Err(e) => {
